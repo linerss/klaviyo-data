@@ -21,3 +21,13 @@ __pycache__/
 .vscode/
 *.iml
 .DS_Store
+
+# dbt (transform/)
+dbt_packages/
+logs/
+profiles.yml
+.user.yml
+*.duckdb
+*.duckdb.wal
+.venv/
+venv/

@@ -1,0 +1,70 @@
+version: 2
+
+models:
+  - name: stg_klaviyo__profiles
+    description: >
+      Klaviyo profiles, one row per profile ID (latest by profile_updated_at).
+      Email is lowercased and trimmed; empty strings become null. Consent flags
+      are booleans; a null flag in the raw table becomes false.
+    columns:
+      - name: profile_id
+        description: Klaviyo profile ID.
+        data_tests:
+          - unique
+          - not_null
+      - name: email
+        description: Lowercased, trimmed email, or null.
+      - name: can_receive_email_marketing
+        description: Klaviyo can_receive_email_marketing. Null in raw becomes false.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: can_receive_sms_marketing
+        description: Klaviyo can_receive_sms_marketing. Null in raw becomes false.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: profile_updated_at
+        description: Klaviyo profile updated timestamp, UTC.
+        data_tests:
+          - not_null
+
+  - name: stg_klaviyo__events
+    description: >
+      Klaviyo events joined to the metric map. No event payload properties are
+      available, because the sync does not store them.
+    columns:
+      - name: event_key
+        description: metric_id and event_id joined with '|'. The raw table's natural key.
+        data_tests:
+          - unique
+          - not_null
+      - name: event_id
+        description: Klaviyo event ID.
+        data_tests:
+          - not_null
+      - name: metric_id
+        description: Klaviyo metric ID.
+        data_tests:
+          - not_null
+      - name: metric_name
+        description: >
+          Name from the metric map. Null when the metric ID is not in the map;
+          the warning from this test means the klaviyo_metric_map seed needs
+          another row.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: profile_id
+        description: Klaviyo profile ID. Can be null.
+      - name: event_at
+        description: Event timestamp, UTC.
+        data_tests:
+          - not_null

@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: klaviyo
+    description: >
+      Raw tables written by the incremental sync in this repo
+      (sql/02_raw_tables.sql). Location is set by the klaviyo_database and
+      klaviyo_schema vars (default RAW.KLAVIYO).
+    database: "{{ var('klaviyo_database', 'RAW') }}"
+    schema: "{{ var('klaviyo_schema', 'KLAVIYO') }}"
+    tables:
+      - name: raw_klaviyo_profiles
+        identifier: "{{ var('klaviyo_profiles_table', 'RAW_KLAVIYO_PROFILES') }}"
+        description: One row per Klaviyo profile ID, MERGEd on ID.
+        columns:
+          - name: id
+            description: Klaviyo profile ID.
+          - name: email
+            description: Email as returned by Klaviyo.
+          - name: email_marketing
+            description: Klaviyo can_receive_email_marketing flag.
+          - name: sms_marketing
+            description: Klaviyo can_receive_sms_marketing flag.
+          - name: updated
+            description: Klaviyo profile updated timestamp. Changes on any property change.
+      - name: raw_klaviyo_events
+        identifier: "{{ var('klaviyo_events_table', 'RAW_KLAVIYO_EVENTS') }}"
+        description: One row per (METRIC_ID, ID). No event payload properties are stored.
+        columns:
+          - name: metric_id
+            description: Klaviyo metric ID.
+          - name: id
+            description: Klaviyo event ID.
+          - name: profile_id
+            description: Profile the event belongs to. Can be null.
+          - name: event_datetime
+            description: Event timestamp.

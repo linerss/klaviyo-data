@@ -1,0 +1,4 @@
+metric_id,metric_name
+SYNTH_M_OPEN,Opened Email
+SYNTH_M_CLICK,Clicked Email
+SYNTH_M_ORDER,Placed Order

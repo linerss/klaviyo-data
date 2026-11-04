@@ -1,0 +1,46 @@
+version: 2
+
+seeds:
+  - name: klaviyo_metric_map
+    description: >
+      FILL THIS IN. Maps Klaviyo metric IDs to metric names. The rows shipped
+      here are placeholders: replace each REPLACE_WITH_..._METRIC_ID with the
+      real ID from GET https://a.klaviyo.com/api/metrics (the same IDs you put
+      in KLAVIYO_EVENT_METRICS). Keep the names exactly as written when you
+      want the engagement columns (opened_email_count and so on) to fill, or
+      change the klaviyo_engagement_metrics var to match. Add a row for every
+      metric you sync. Run dbt seed, then dbt build --full-refresh.
+    columns:
+      - name: metric_id
+        description: Klaviyo metric ID.
+        data_tests:
+          - unique
+          - not_null
+      - name: metric_name
+        description: Metric name, for example Opened Email.
+        data_tests:
+          - not_null
+
+  - name: example_synthetic_metric_map
+    description: SYNTHETIC test data for the duckdb target only. Metric map for the synthetic events.
+    columns:
+      - name: metric_id
+        data_tests:
+          - unique
+          - not_null
+
+  - name: example_synthetic_raw_klaviyo_profiles
+    description: >
+      SYNTHETIC test data for the duckdb target only. Shaped like
+      RAW_KLAVIYO_PROFILES. Includes a duplicate ID, untrimmed and mixed-case
+      emails, a missing email and null consent flags on purpose.
+
+  - name: example_synthetic_raw_klaviyo_events
+    description: >
+      SYNTHETIC test data for the duckdb target only. Shaped like
+      RAW_KLAVIYO_EVENTS. Includes an event with no profile on purpose.
+
+  - name: example_synthetic_shopify_customers
+    description: >
+      SYNTHETIC test data for the duckdb target only. Used by the example
+      klaviyo_shopify_customer_bridge model when it is enabled.

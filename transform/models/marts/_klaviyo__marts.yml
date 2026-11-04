@@ -1,0 +1,188 @@
+version: 2
+
+models:
+  - name: dim_klaviyo_profiles
+    description: Current state of each Klaviyo profile, with email and SMS consent.
+    columns:
+      - name: profile_id
+        description: Klaviyo profile ID.
+        data_tests:
+          - unique
+          - not_null
+      - name: email
+        description: Lowercased, trimmed email, or null.
+      - name: has_email
+        description: True when the profile has an email.
+        data_tests:
+          - not_null
+      - name: email_domain
+        description: Part of the email after '@'.
+      - name: can_receive_email_marketing
+        description: Klaviyo email marketing consent.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: can_receive_sms_marketing
+        description: Klaviyo SMS marketing consent.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: profile_updated_at
+        description: Klaviyo profile updated timestamp, UTC.
+        data_tests:
+          - not_null
+
+  - name: fct_klaviyo_events
+    description: >
+      One row per Klaviyo event, with the mapped metric name. Incremental;
+      run with --full-refresh after changing the metric map.
+    columns:
+      - name: event_key
+        description: metric_id and event_id joined with '|'.
+        data_tests:
+          - unique
+          - not_null
+      - name: event_id
+        description: Klaviyo event ID.
+        data_tests:
+          - not_null
+      - name: metric_id
+        description: Klaviyo metric ID.
+        data_tests:
+          - not_null
+      - name: metric_name
+        description: Name from the metric map, or null when unmapped.
+      - name: profile_id
+        description: >
+          Klaviyo profile ID. Can be null. Events can arrive before their
+          profile is synced, so the relationship test only warns.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_klaviyo_profiles')
+                field: profile_id
+              config:
+                severity: warn
+      - name: event_at
+        description: Event timestamp, UTC.
+        data_tests:
+          - not_null
+      - name: event_date
+        description: Date of event_at.
+        data_tests:
+          - not_null
+
+  - name: klaviyo_profile_engagement
+    description: >
+      One row per profile in dim_klaviyo_profiles: first and last event, total
+      events, a count and last timestamp for each name in the
+      klaviyo_engagement_metrics var (default Opened Email, Clicked Email,
+      Placed Order), and activity flags for each window in
+      klaviyo_activity_windows_days (default 30, 90, 365). Flags are relative
+      to activity_as_of_at (current UTC time, or klaviyo_as_of_timestamp).
+      Profiles with no events have zero counts and false flags.
+    columns:
+      - name: profile_id
+        description: Klaviyo profile ID.
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_klaviyo_profiles')
+                field: profile_id
+      - name: first_event_at
+        description: Earliest event for the profile, any metric.
+      - name: last_event_at
+        description: Latest event for the profile, any metric.
+      - name: total_event_count
+        description: Events for the profile, any metric, mapped or not.
+        data_tests:
+          - not_null
+      - name: opened_email_count
+        description: Events with metric_name 'Opened Email'.
+        data_tests:
+          - not_null
+      - name: last_opened_email_at
+        description: Latest 'Opened Email' event.
+      - name: clicked_email_count
+        description: Events with metric_name 'Clicked Email'.
+        data_tests:
+          - not_null
+      - name: last_clicked_email_at
+        description: Latest 'Clicked Email' event.
+      - name: placed_order_count
+        description: Events with metric_name 'Placed Order'.
+        data_tests:
+          - not_null
+      - name: last_placed_order_at
+        description: Latest 'Placed Order' event.
+      - name: days_since_last_event
+        description: Whole days from last_event_at to activity_as_of_at.
+      - name: is_active_last_30d
+        description: Any event in the 30 days before activity_as_of_at.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_active_last_90d
+        description: Any event in the 90 days before activity_as_of_at.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: is_active_last_365d
+        description: Any event in the 365 days before activity_as_of_at.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false
+      - name: activity_as_of_at
+        description: Reference time for the activity flags, UTC.
+        data_tests:
+          - not_null
+
+  - name: klaviyo_mailable_profiles
+    description: >
+      Profiles that can receive email marketing and have an email address.
+      When klaviyo_mailable_active_within_days is set, only profiles with any
+      event in that many days are kept.
+    columns:
+      - name: profile_id
+        description: Klaviyo profile ID.
+        data_tests:
+          - unique
+          - not_null
+      - name: email
+        description: Lowercased, trimmed email.
+        data_tests:
+          - not_null
+      - name: email_domain
+        description: Part of the email after '@'.
+      - name: can_receive_email_marketing
+        description: Always true in this model.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true]
+                quote: false
+      - name: can_receive_sms_marketing
+        description: Klaviyo SMS marketing consent.
+      - name: profile_updated_at
+        description: Klaviyo profile updated timestamp, UTC.
+      - name: last_event_at
+        description: Latest event for the profile, any metric.
+      - name: days_since_last_event
+        description: Whole days since last_event_at.
