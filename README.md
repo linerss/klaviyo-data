@@ -1,6 +1,7 @@
-# klaviyo-snowflake
+# klaviyo-snowflake-sync
 
-Incremental extraction of Klaviyo profiles and events into Snowflake.
+Incremental extraction of Klaviyo profiles and events into Snowflake, plus an
+optional dbt project (`transform/`) that models the raw tables.
 
 The pipeline reads the Klaviyo REST API (`/api/profiles` and `/api/events`) and
 MERGEs the results into raw Snowflake tables. Each stream keeps a durable
@@ -225,6 +226,135 @@ java -cp 'target/classes:target/lib/*' \
   com.greyfielddata.klaviyo.StateBootstrap inspect
 ```
 
+## Transform
+
+`transform/` is a dbt project (dbt-snowflake) that turns the raw tables into
+staging views and analysis-ready tables. It only uses the columns the sync
+stores. There are no event payload properties, so there is no revenue, campaign
+or flow attribution here.
+
+### Models
+
+| Model | Type | What it is for |
+| --- | --- | --- |
+| `stg_klaviyo__profiles` | view | One row per profile ID (latest by `UPDATED`). Email lowercased and trimmed, empty email as null, consent flags as booleans (null becomes false). |
+| `stg_klaviyo__events` | view | One row per event, keyed on `metric_id` and `event_id`, with `metric_name` from the metric map. |
+| `dim_klaviyo_profiles` | table | Current state of each profile: email, email domain, email and SMS consent. |
+| `fct_klaviyo_events` | incremental | One row per event with metric name, profile, timestamp and date. Reprocesses the last `klaviyo_events_lookback_days` (default 3) on each run. |
+| `klaviyo_profile_engagement` | table | Per profile: first and last event, total events, count and last timestamp for Opened Email, Clicked Email and Placed Order, days since last event, and active in last 30, 90 and 365 days flags. |
+| `klaviyo_mailable_profiles` | table | Profiles with email consent and an email address. Optionally only those active within N days. |
+| `klaviyo_shopify_customer_bridge` | table, disabled | EXAMPLE ONLY. Joins Klaviyo profiles to a Shopify customers table that you load yourself, on normalized email. |
+
+Timestamps are converted to UTC without a time zone. Every model has
+descriptions and tests (`unique`, `not_null`, `accepted_values`,
+`relationships`) in the `schema.yml` files next to it. Two tests only warn:
+`metric_name` not null in `stg_klaviyo__events` (a metric ID is missing from
+the map) and the events to profiles relationship (events can arrive before
+their profile is synced).
+
+### Metric map setup
+
+The sync stores metric IDs, not names. The models get names from the seed
+`transform/seeds/klaviyo_metric_map.csv` (`metric_id,metric_name`). It ships
+with placeholder rows that you must replace:
+
+```csv
+metric_id,metric_name
+REPLACE_WITH_OPENED_EMAIL_METRIC_ID,Opened Email
+REPLACE_WITH_CLICKED_EMAIL_METRIC_ID,Clicked Email
+REPLACE_WITH_PLACED_ORDER_METRIC_ID,Placed Order
+```
+
+1. List your metric IDs with `GET https://a.klaviyo.com/api/metrics` (the
+   same IDs you put in `KLAVIYO_EVENT_METRICS`).
+2. Replace each placeholder ID and add a row for every other metric you sync.
+   If you fill the optional `LOOKUP_KLAVIYO_METRICS` table from
+   `sql/02_raw_tables.sql`, you can export it into this file.
+3. Keep the names `Opened Email`, `Clicked Email` and `Placed Order` exactly,
+   or change the `klaviyo_engagement_metrics` var to the names you use.
+4. Run `dbt seed`, then `dbt build --full-refresh` so existing events get the
+   new names.
+
+### Variables
+
+Set in `transform/dbt_project.yml` or with `--vars`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `klaviyo_database` | `RAW` | database holding the raw tables |
+| `klaviyo_schema` | `KLAVIYO` | schema holding the raw tables |
+| `klaviyo_profiles_table` | `RAW_KLAVIYO_PROFILES` | profiles table name |
+| `klaviyo_events_table` | `RAW_KLAVIYO_EVENTS` | events table name |
+| `klaviyo_engagement_metrics` | Opened Email, Clicked Email, Placed Order | metric names that get count and last-seen columns in `klaviyo_profile_engagement` |
+| `klaviyo_activity_windows_days` | `[30, 90, 365]` | activity flag windows |
+| `klaviyo_mailable_active_within_days` | `null` | when set, `klaviyo_mailable_profiles` keeps only profiles with an event in this many days |
+| `klaviyo_events_lookback_days` | `3` | incremental lookback for `fct_klaviyo_events` |
+| `klaviyo_as_of_timestamp` | `null` | fixed reference time for activity flags; null means now (UTC) |
+| `klaviyo_enable_shopify_bridge` | `false` | build the example Shopify bridge |
+| `shopify_database`, `shopify_schema`, `shopify_customers_table` | `RAW`, `SHOPIFY`, `CUSTOMERS` | location of your Shopify customers table (example) |
+| `shopify_customer_id_column`, `shopify_customer_email_column` | `ID`, `EMAIL` | its ID and email columns (example) |
+
+If you change `klaviyo_engagement_metrics` or `klaviyo_activity_windows_days`,
+update the column tests in `models/marts/_klaviyo__marts.yml` to match.
+
+### Running
+
+```bash
+cd transform
+python3 -m venv .venv && . .venv/bin/activate
+pip install dbt-core dbt-snowflake
+cp profiles.example.yml profiles.yml   # git-ignored; or use ~/.dbt/profiles.yml
+# set SNOWFLAKE_ACCOUNT and the DBT_SNOWFLAKE_* variables it reads
+dbt seed --target snowflake
+dbt build --target snowflake
+```
+
+The dbt user needs read access to the raw schema and a schema it can write to
+(`DBT_SNOWFLAKE_DATABASE` and `DBT_SNOWFLAKE_SCHEMA`, default
+`ANALYTICS.KLAVIYO_MODELS`). The pipeline role from `sql/01_role.sql` is not
+meant for this.
+
+Mailable profiles active in the last 90 days:
+
+```bash
+dbt build --target snowflake --select klaviyo_mailable_profiles \
+  --vars '{klaviyo_mailable_active_within_days: 90}'
+```
+
+### Local test run on synthetic data
+
+The `duckdb` target in `profiles.example.yml` runs the whole project locally,
+without Snowflake:
+
+```bash
+pip install dbt-core dbt-duckdb
+dbt build --target duckdb
+```
+
+On the duckdb target the models read the `transform/seeds/example_synthetic_*`
+seeds instead of the raw tables. These files are SYNTHETIC: made-up IDs
+(`SYNTH_...`) and addresses on the reserved `example.com`, `example.org` and
+`example.net` domains. They are only used by the duckdb target and are disabled
+on Snowflake. To also build the example bridge locally:
+
+```bash
+dbt build --target duckdb --vars '{klaviyo_enable_shopify_bridge: true}'
+```
+
+The SQL avoids dialect-specific functions where it can and uses dbt
+cross-database macros (`dbt.dateadd`, `dbt.datediff`, `dbt.split_part`,
+`dbt.concat`). Time zone handling is one small dispatched macro with a
+Snowflake and a DuckDB version (`macros/klaviyo_helpers.sql`).
+
+### Shopify bridge (example)
+
+`klaviyo_shopify_customer_bridge` is an example of joining to another source,
+not a supported Shopify integration. This repo does not load Shopify. To try
+it, load a Shopify customers table, point the `shopify_*` vars at it and set
+`klaviyo_enable_shopify_bridge: true`. It matches on lowercased, trimmed email
+and is many-to-many, because one email can belong to several profiles or
+customers.
+
 ## Tests
 
 ```bash
@@ -233,6 +363,8 @@ pytest tests          # Python and shell runner tests
 # or, without pytest:
 cd tests && python3 -m unittest
 ```
+
+For the dbt project, see the local test run under Transform.
 
 No test needs network access, Klaviyo or Snowflake. The Java tests cover the
 planning logic, including a simulation of crashes and lost cursors across page

@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: klaviyo_shopify_customer_bridge
+    description: >
+      EXAMPLE MODEL, disabled by default (klaviyo_enable_shopify_bridge).
+      Matches Klaviyo profiles to a user-provided Shopify customers source on
+      normalized email. Many-to-many: one email can map to several profiles or
+      customers. Adapt it to your own Shopify schema before relying on it.
+    columns:
+      - name: bridge_key
+        description: Klaviyo profile ID and Shopify customer ID joined with '|'.
+        data_tests:
+          - unique
+          - not_null
+      - name: klaviyo_profile_id
+        description: Klaviyo profile ID.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_klaviyo_profiles')
+                field: profile_id
+      - name: shopify_customer_id
+        description: Shopify customer ID from the user-provided source.
+        data_tests:
+          - not_null
+      - name: email
+        description: Normalized email the match was made on.
+        data_tests:
+          - not_null
+      - name: can_receive_email_marketing
+        description: Klaviyo email consent for the matched profile.

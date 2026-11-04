@@ -1,0 +1,15 @@
+version: 2
+
+# EXAMPLE ONLY. A Shopify customers table that you load yourself (this repo
+# does not sync Shopify). Point the shopify_* vars at it and set
+# klaviyo_enable_shopify_bridge: true to build klaviyo_shopify_customer_bridge.
+sources:
+  - name: shopify
+    description: EXAMPLE. User-provided Shopify customers table. Not loaded by this repo.
+    database: "{{ var('shopify_database', 'RAW') }}"
+    schema: "{{ var('shopify_schema', 'SHOPIFY') }}"
+    config:
+      enabled: "{{ var('klaviyo_enable_shopify_bridge', false) }}"
+    tables:
+      - name: customers
+        identifier: "{{ var('shopify_customers_table', 'CUSTOMERS') }}"

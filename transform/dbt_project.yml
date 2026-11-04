@@ -1,0 +1,93 @@
+name: klaviyo_transform
+version: "0.1.0"
+config-version: 2
+
+profile: klaviyo_transform
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  # Where the sync writes its raw tables (see sql/02_raw_tables.sql).
+  klaviyo_database: RAW
+  klaviyo_schema: KLAVIYO
+  klaviyo_profiles_table: RAW_KLAVIYO_PROFILES
+  klaviyo_events_table: RAW_KLAVIYO_EVENTS
+
+  # Metric names that get their own count and last-seen columns in
+  # klaviyo_profile_engagement. Each name must match a metric_name in the
+  # klaviyo_metric_map seed.
+  klaviyo_engagement_metrics: ["Opened Email", "Clicked Email", "Placed Order"]
+
+  # Activity flags in klaviyo_profile_engagement, in days.
+  klaviyo_activity_windows_days: [30, 90, 365]
+
+  # klaviyo_mailable_profiles: set to a number of days to keep only profiles
+  # with any event in that window. null keeps every consented profile.
+  klaviyo_mailable_active_within_days: null
+
+  # fct_klaviyo_events is incremental. Each run reprocesses this many days
+  # before the latest loaded event, to pick up late events.
+  klaviyo_events_lookback_days: 3
+
+  # Optional fixed "now" for activity flags (for example '2026-01-01 00:00:00').
+  # null uses the current UTC time.
+  klaviyo_as_of_timestamp: null
+
+  # EXAMPLE ONLY: Shopify bridge, disabled by default.
+  klaviyo_enable_shopify_bridge: false
+  shopify_database: RAW
+  shopify_schema: SHOPIFY
+  shopify_customers_table: CUSTOMERS
+  shopify_customer_id_column: ID
+  shopify_customer_email_column: EMAIL
+
+  # Read the synthetic example_synthetic_* seeds instead of the real sources.
+  # Defaults to true on the duckdb target only. Never enable it in production.
+  # klaviyo_use_example_data: false
+
+models:
+  klaviyo_transform:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+    examples:
+      +materialized: table
+
+seeds:
+  klaviyo_transform:
+    +quote_columns: false
+    klaviyo_metric_map:
+      +column_types:
+        metric_id: varchar
+        metric_name: varchar
+    example_synthetic_raw_klaviyo_profiles:
+      +enabled: "{{ var('klaviyo_use_example_data', target.type == 'duckdb') }}"
+      +column_types:
+        id: varchar
+        email: varchar
+        email_marketing: boolean
+        sms_marketing: boolean
+        updated: timestamp
+    example_synthetic_raw_klaviyo_events:
+      +enabled: "{{ var('klaviyo_use_example_data', target.type == 'duckdb') }}"
+      +column_types:
+        id: varchar
+        metric_id: varchar
+        profile_id: varchar
+        event_datetime: timestamp
+    example_synthetic_metric_map:
+      +enabled: "{{ var('klaviyo_use_example_data', target.type == 'duckdb') }}"
+      +column_types:
+        metric_id: varchar
+        metric_name: varchar
+    example_synthetic_shopify_customers:
+      +enabled: "{{ var('klaviyo_use_example_data', target.type == 'duckdb') }}"
+      +column_types:
+        id: varchar
+        email: varchar

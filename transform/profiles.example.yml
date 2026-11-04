@@ -1,0 +1,28 @@
+# Copy to ~/.dbt/profiles.yml (or to transform/profiles.yml, which is
+# git-ignored) and edit. Never commit a profiles.yml with credentials.
+#
+#   dbt build --target duckdb      # local run on SYNTHETIC example data
+#   dbt build --target snowflake   # your real Snowflake account
+klaviyo_transform:
+  target: snowflake
+  outputs:
+    snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('DBT_SNOWFLAKE_USER') }}"
+      # Key-pair auth, same style as the sync. Use password: instead if you prefer.
+      private_key_path: "{{ env_var('DBT_SNOWFLAKE_PRIVATE_KEY_FILE') }}"
+      private_key_passphrase: "{{ env_var('DBT_SNOWFLAKE_PRIVATE_KEY_FILE_PWD', '') }}"
+      role: "{{ env_var('DBT_SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
+      warehouse: "{{ env_var('DBT_SNOWFLAKE_WAREHOUSE') }}"
+      # Where models are built. The raw tables are read from the
+      # klaviyo_database / klaviyo_schema vars (default RAW.KLAVIYO).
+      database: "{{ env_var('DBT_SNOWFLAKE_DATABASE', 'ANALYTICS') }}"
+      schema: "{{ env_var('DBT_SNOWFLAKE_SCHEMA', 'KLAVIYO_MODELS') }}"
+      threads: 4
+
+    duckdb:
+      # Local testing only. Reads the SYNTHETIC example_synthetic_* seeds.
+      type: duckdb
+      path: klaviyo_example.duckdb
+      threads: 1
