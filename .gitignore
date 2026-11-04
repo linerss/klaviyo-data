@@ -1,0 +1,23 @@
+# Build output
+target/
+
+# Runtime status, locks and snapshots
+state/
+
+# Local configuration and secrets
+.env
+*.p8
+*.pem
+*.key
+*api-key*
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
