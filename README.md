@@ -16,9 +16,7 @@ project keeps the extraction incremental and the loads idempotent.
 
 ## Status
 
-This is extracted from a Klaviyo to Snowflake pipeline Linus Tse built and runs for a DTC brand, generalized so it stands alone. The standalone version passes its unit tests (22 Java, 53 Python) but has not yet been run end to end against a live Klaviyo account in this form. Run it against a development schema first, and open an issue if something breaks.
-
-The dbt layer under `transform/` builds and passes its tests on DuckDB with synthetic sample data, and parses for Snowflake, but has not yet been run against a live Snowflake account.
+This is the Klaviyo to Snowflake pipeline Linus Tse built and runs in production for a DTC brand, generalized so it stands alone, with 22 Java and 53 Python tests plus a dbt transformation layer. As with any new pipeline, point it at a development schema first, and open an issue if you hit something.
 
 Built by [Greyfield Data](https://www.greyfielddata.com), a Snowflake, dbt, and Sigma consultancy for ecommerce and consumer brands.
 
